@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "thoughtsparkflow"
+version = "0.1.0"
+description = "Automation of WordPress posting with OpenAI integration"
+readme = "README.md"
+requires-python = ">=3.13"
+authors = [{ name = "Wiktor Szczeszek" }]
+dependencies = [
+  "pydantic[email]>=2.11",
+  "pydantic-settings>=2.10",
+  "PyYAML>=6.0"
+]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["thoughtsparkflow*"]
