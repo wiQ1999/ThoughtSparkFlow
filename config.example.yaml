@@ -1,0 +1,8 @@
+authors:
+  - email: author1@domain.pl
+    category: category1
+    style_description: Style description.
+
+  - email: author2@domain.pl
+    category: category2
+    style_description: Style description.
