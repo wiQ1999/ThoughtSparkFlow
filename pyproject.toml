@@ -12,7 +12,8 @@ authors = [{ name = "Wiktor Szczeszek" }]
 dependencies = [
   "pydantic[email]>=2.11",
   "pydantic-settings>=2.10",
-  "PyYAML>=6.0"
+  "PyYAML>=6.0",
+  "requests>=2.32"
 ]
 
 [tool.setuptools]
