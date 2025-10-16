@@ -6,6 +6,10 @@ class EditorResult(BaseModel):
     id: int
     email: EmailStr
 
+class CategoryResult(BaseModel):
+    id: int
+    name: str
+
 class TopicsRequest(BaseModel):
     published_num: int
     draft_num: int
@@ -13,7 +17,7 @@ class TopicsRequest(BaseModel):
 class DraftCreationRequest(BaseModel):
     topic: str
     content: str
-    category: str
+    category_id: int
     editor_id: int
 
 class MediaUploadRequest(BaseModel):
@@ -27,7 +31,7 @@ class PostMediaUpdateRequest(BaseModel):
 
 class WPPort(Protocol):
     def get_all_editors(self) -> Iterable[EditorResult]: ...
-    def get_all_categories(self) -> Iterable[str]: ...
+    def get_all_categories(self) -> Iterable[CategoryResult]: ...
     def get_last_topics(self, request: TopicsRequest) -> Iterable[str]: ...
     def create_draft_post(self, request: DraftCreationRequest) -> int: ...
     def upload_media(self, request: MediaUploadRequest) -> int: ...
