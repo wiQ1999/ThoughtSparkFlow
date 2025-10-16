@@ -14,6 +14,13 @@ from .ports import (
     ImageRequest,
     ImageGenPort
 )
+from .models import (
+    AuthorCategoryEntry,
+    AuthorCategoryMap,
+    ArticleDraft,
+    DraftsAggregator,
+    GenerateDraftsResult,
+)
 
 __all__ = [
    "EditorResult",
@@ -27,5 +34,10 @@ __all__ = [
     "ContentGenRequest",
     "TextGenPort",
     "ImageRequest",
-    "ImageGenPort"
+    "ImageGenPort",
+    "AuthorCategoryEntry",
+    "AuthorCategoryMap",
+    "ArticleDraft",
+    "DraftsAggregator",
+    "GenerateDraftsResult",
 ]
