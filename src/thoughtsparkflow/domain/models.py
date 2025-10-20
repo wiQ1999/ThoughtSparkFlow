@@ -5,7 +5,7 @@ from typing import Iterable, Optional
 
 from pydantic import BaseModel, EmailStr
 
-from .exceptions import AuthorCategoryDomainError
+from .errors import AuthorCategoryDomainError
 from .helpers import (
     build_context,
     normalize_category_name,
