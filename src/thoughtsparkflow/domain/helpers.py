@@ -22,3 +22,20 @@ def normalize_category_name(value: Optional[str]) -> Optional[str]:
     if plain is None:
         return None
     return plain.casefold()
+
+def safe_int(value: object) -> Optional[int]:
+    try:
+        integer = int(value)
+    except (TypeError, ValueError):
+        return None
+    return integer if integer >= 0 else None
+
+
+def ensure_positive_int(value: int | str, field: str) -> int:
+    try:
+        integer = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field} must be an integer") from exc
+    if integer <= 0:
+        raise ValueError(f"{field} must be a positive integer")
+    return integer
