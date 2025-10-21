@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, replace, fields
 from typing import Iterable, Optional
 
 from pydantic import BaseModel, EmailStr
@@ -66,6 +66,25 @@ class AuthorCategoryMap:
 
     def entries_snapshot(self) -> tuple[AuthorCategoryEntry, ...]:
         return tuple(replace(entry) for entry in self._entries)
+
+    def validate_complete_entries(self) -> None:
+        missing_entries: list[str] = []
+        all_fields = [f.name for f in fields(AuthorCategoryEntry)]
+        for index, entry in enumerate(self._entries, start=1):
+            missing_fields = [name for name in all_fields if getattr(entry, name) is None]
+            if not missing_fields:
+                continue
+            context = build_context(
+                author_id=entry.author_id,
+                author_email=entry.author_email,
+                category_id=entry.category_id,
+                category_name=entry.category_name,
+            )
+            entry_label = context if context else f"entry #{index}"
+            missing_entries.append(f"{entry_label}: missing {', '.join(sorted(missing_fields))}")
+        if missing_entries:
+            message = "Incomplete author/category entries: " + " | ".join(missing_entries)
+            raise AuthorCategoryDomainError(message)
 
     def find_by_category_name(self, category_name: str) -> Optional[AuthorCategoryEntry]:
         normalized_name = normalize_category_name(category_name)

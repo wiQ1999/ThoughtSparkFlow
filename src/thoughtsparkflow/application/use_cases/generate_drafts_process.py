@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 
 
 def _ensure_non_empty(name: str, coll: Iterable) -> None:
-    if not list(coll):
+    if not list(coll) or len(list(coll)) == 0:
         raise ProcessAbort(f"{name}: empty response")
 
 
@@ -59,38 +59,6 @@ def _ensure_unique_topics(topics: Iterable[str]) -> None:
         if normalized in seen:
             raise ProcessAbort("generate_topics: no unique topics produced.")
         seen.add(normalized)
-
-
-def _ensure_author_map_coverage(author_map: AuthorCategoryMap, cfg_authors: Iterable[Author]) -> None:
-    missing_categories: list[str] = []
-    missing_editors: list[str] = []
-    missing_styles: list[str] = []
-
-    for author in cfg_authors:
-        entry = author_map.find_by_category_name(author.category)
-        if entry is None:
-            missing_categories.append(author.category)
-            continue
-        if entry.category_id is None:
-            missing_categories.append(author.category)
-        if entry.author_id is None or entry.author_email is None:
-            missing_editors.append(str(author.email))
-        if entry.author_style_description is None:
-            missing_styles.append(str(author.email))
-
-    messages: list[str] = []
-    if missing_categories:
-        unique_categories = ", ".join(sorted(set(missing_categories)))
-        messages.append(f"categories missing WordPress mapping: {unique_categories}")
-    if missing_editors:
-        unique_editors = ", ".join(sorted(set(missing_editors)))
-        messages.append(f"authors missing WordPress editor: {unique_editors}")
-    if missing_styles:
-        unique_styles = ", ".join(sorted(set(missing_styles)))
-        messages.append(f"authors missing style description: {unique_styles}")
-
-    if messages:
-        raise ProcessAbort(" | ".join(messages))
 
 
 def _require_link(author_map: AuthorCategoryMap, category_name: str) -> AuthorCategoryEntry:
@@ -137,7 +105,6 @@ class GenerateDraftsProcess:
             self.log.info("Fetching editors (WordPress)...")
             editors: list[EditorResult] = list(self.wp.get_all_editors())
             _ensure_non_empty("get_all_editors", editors)
-            self.log.debug("Editors fetched: %d", len(editors))
             author_map.add_editors_from_wordpress(
                 WordPressEditorInput(
                     author_id=str(editor.id),
@@ -145,11 +112,11 @@ class GenerateDraftsProcess:
                 )
                 for editor in editors
             )
+            self.log.debug("Editors fetched: %d", len(editors))
 
             self.log.info("Fetching categories (WordPress)...")
             categories: list[CategoryResult] = list(self.wp.get_all_categories())
             _ensure_non_empty("get_all_categories", categories)
-            self.log.debug("Categories fetched: %d", len(categories))
             author_map.add_categories_from_wordpress(
                 WordPressCategoryInput(
                     category_id=str(category.id),
@@ -157,6 +124,7 @@ class GenerateDraftsProcess:
                 )
                 for category in categories
             )
+            self.log.debug("Categories fetched: %d", len(categories))
 
             self.log.info("Loading file config (System)...")
             self.cfg = load_config()
@@ -176,7 +144,7 @@ class GenerateDraftsProcess:
                 )
                 for author in self.cfg.file.authors
             )
-            _ensure_author_map_coverage(author_map, self.cfg.file.authors)
+            author_map.validate_complete_entries()
             self.log.debug("Author/category map prepared: %d entries", len(author_map.entries_snapshot()))
 
             self.log.info("Fetching last topics (WordPress)...")
