@@ -10,6 +10,7 @@ from .helpers import (
     normalize_category_name,
     normalize_email,
     normalize_plain_text,
+    safe_int,
 )
 
 
@@ -116,230 +117,187 @@ class CategoryList:
 
 
 class AuthorCategoryMap:
-    """Aggregate that keeps AuthorCategoryEntry items consistent and unique."""
+    """Aggregate that combines WP editors, categories, and config authors."""
 
     def __init__(self) -> None:
-        self._entries: list[AuthorCategoryEntry] = []
-        self._unique_author_ids: set[str] = set()
-        self._unique_author_emails: set[str] = set()
-        self._unique_category_ids: set[str] = set()
-        self._unique_category_names: set[str] = set()
-
-    def add_authors_from_config(self, items: Iterable[ConfigAuthor]) -> None:
-        for item in items:
-            self._add_author_from_config(item)
+        self._entries: dict[str, AuthorCategoryEntry] = {}
+        self._email_to_category: dict[str, str] = {}
+        self._editors = EditorList()
+        self._categories = CategoryList()
+        self._wp_editors_loaded = False
+        self._wp_categories_loaded = False
 
     def add_editors_from_wordpress(self, items: Iterable[WordPressEditor]) -> None:
         for item in items:
-            self._add_editor_from_wordpress(item)
+            editor = self._sanitize_editor(item)
+            self._editors.add_editor(editor)
+        self._wp_editors_loaded = True
 
     def add_categories_from_wordpress(self, items: Iterable[WordPressCategory]) -> None:
         for item in items:
-            self._add_category_from_wordpress(item)
+            category = self._sanitize_category(item)
+            self._categories.add_category(category)
+        self._seed_entries_from_categories()
+        self._wp_categories_loaded = True
 
-    def entries_snapshot(self) -> tuple[AuthorCategoryEntry, ...]:
-        return tuple(replace(entry) for entry in self._entries)
+    def add_authors_from_config(self, items: Iterable[ConfigAuthor]) -> None:
+        self._ensure_wordpress_bootstrapped()
+        for item in items:
+            self._assign_author(item)
 
-    def validate_complete_entries(self) -> None:
-        missing_entries: list[str] = []
-        all_fields = [f.name for f in fields(AuthorCategoryEntry)]
-        for index, entry in enumerate(self._entries, start=1):
-            missing_fields = [name for name in all_fields if getattr(entry, name) is None]
-            if not missing_fields:
+    def ensure_data_from_config_complete(self, items: Iterable[ConfigAuthor]) -> None:
+        self._ensure_wordpress_bootstrapped()
+        errors: list[str] = []
+        inspected_categories: set[str] = set()
+        for index, item in enumerate(items, start=1):
+            normalized_category = normalize_category_name(item.category_name)
+            normalized_email = normalize_email(item.author_email)
+            label = item.category_name or item.author_email or f"config entry #{index}"
+            if normalized_category is None:
+                errors.append(f"{label}: invalid category name.")
                 continue
-            context = build_context(
-                author_id=entry.author_id,
-                author_email=entry.author_email,
-                category_id=entry.category_id,
-                category_name=entry.category_name,
+            if normalized_category in inspected_categories:
+                continue
+            inspected_categories.add(normalized_category)
+            entry = self._entries.get(normalized_category)
+            if entry is None:
+                errors.append(f"{label}: category missing in WordPress data.")
+                continue
+            missing_fields: list[str] = []
+            if entry.category_id is None:
+                missing_fields.append("category_id")
+            if entry.category_name is None:
+                missing_fields.append("category_name")
+            if entry.author_id is None:
+                missing_fields.append("author_id")
+            if entry.author_email is None:
+                missing_fields.append("author_email")
+            elif normalized_email is not None and entry.author_email != normalized_email:
+                missing_fields.append(
+                    f"author_email mismatch (expected {normalized_email}, got {entry.author_email})"
+                )
+            if entry.author_style_description is None:
+                missing_fields.append("author_style_description")
+            if missing_fields:
+                errors.append(f"{label}: " + ", ".join(missing_fields))
+        if errors:
+            raise AuthorCategoryDomainError(
+                "Incomplete author/category configuration: " + " | ".join(errors)
             )
-            entry_label = context if context else f"entry #{index}"
-            missing_entries.append(f"{entry_label}: missing {', '.join(sorted(missing_fields))}")
-        if missing_entries:
-            message = "Incomplete author/category entries: " + " | ".join(missing_entries)
-            raise AuthorCategoryDomainError(message)
 
     def find_by_category_name(self, category_name: str) -> Optional[AuthorCategoryEntry]:
         normalized_name = normalize_category_name(category_name)
         if normalized_name is None:
             return None
-        for entry in self._entries:
-            if entry.category_name == normalized_name:
-                return replace(entry)
-        return None
+        entry = self._entries.get(normalized_name)
+        return replace(entry) if entry else None
 
-    def _add_author_from_config(self, item: ConfigAuthor) -> None:
-        email = normalize_email(item.author_email)
-        category_name = normalize_category_name(item.category_name)
-        style = normalize_plain_text(item.author_style_description)
-        candidate = self._find_candidate_for_config(email, category_name)
-        context = build_context(author_email=email, category_name=category_name)
-        if candidate is None:
-            new_entry = AuthorCategoryEntry(
-                author_email=email,
-                author_style_description=style,
-                category_name=category_name,
-            )
-            self._persist_new_entry(new_entry)
-            return
+    def entries_snapshot(self) -> tuple[AuthorCategoryEntry, ...]:
+        return tuple(replace(entry) for entry in self._entries.values())
 
-        updated_entry = replace(
-            candidate,
-            author_email=_merge_field(
-                "author_email", 
-                candidate.author_email, 
-                email, 
-                context
-            ),
-            author_style_description=_merge_field(
-                "author_style_description", 
-                candidate.author_style_description, 
-                style, 
-                context
-            ),
-            category_name=_merge_field(
-                "category_name", 
-                candidate.category_name, 
-                category_name, 
-                context
-            ),
-        )
-        self._persist_updated_entry(candidate, updated_entry)
-
-    def _add_editor_from_wordpress(self, item: WordPressEditor) -> None:
-        author_id = normalize_plain_text(item.id)
+    def _sanitize_editor(self, item: WordPressEditor) -> WordPressEditor:
         email = normalize_email(item.email)
-        candidate = self._find_candidate_for_editor(author_id, email)
-        context = build_context(author_id=author_id, author_email=email)
-        if candidate is None:
-            new_entry = AuthorCategoryEntry(author_id=author_id, author_email=email)
-            self._persist_new_entry(new_entry)
-            return
+        if email is None:
+            raise AuthorCategoryDomainError(
+                "WordPress editor email is missing."
+            )
+        editor_id = safe_int(item.id)
+        if editor_id is None:
+            raise AuthorCategoryDomainError(
+                f"Invalid WordPress editor id: {item.id!r}"
+            )
+        return WordPressEditor(id=editor_id, email=email)
 
-        updated_entry = replace(
-            candidate,
-            author_id=_merge_field("author_id", candidate.author_id, author_id, context),
-            author_email=_merge_field("author_email", candidate.author_email, email, context),
-        )
-        self._persist_updated_entry(candidate, updated_entry)
-
-    def _add_category_from_wordpress(self, item: WordPressCategory) -> None:
-        category_id = normalize_plain_text(item.id)
+    def _sanitize_category(self, item: WordPressCategory) -> WordPressCategory:
+        category_id = normalize_plain_text(str(item.id))
+        if category_id is None:
+            raise AuthorCategoryDomainError(
+                "WordPress category id is missing."
+            )
         category_name = normalize_category_name(item.name)
-        candidate = self._find_candidate_for_category(category_id, category_name)
-        context = build_context(category_id=category_id, category_name=category_name)
-        if candidate is None:
-            new_entry = AuthorCategoryEntry(category_id=category_id, category_name=category_name)
-            self._persist_new_entry(new_entry)
-            return
+        if category_name is None:
+            raise AuthorCategoryDomainError(
+                "WordPress category name is missing."
+            )
+        return WordPressCategory(id=category_id, name=category_name)
 
-        updated_entry = replace(
-            candidate,
-            category_id=_merge_field("category_id", candidate.category_id, category_id, context),
-            category_name=_merge_field("category_name", candidate.category_name, category_name, context),
+    def _ensure_wordpress_bootstrapped(self) -> None:
+        if not self._wp_editors_loaded or not self._wp_categories_loaded:
+            raise AuthorCategoryDomainError(
+                "WordPress data must be uploaded " \
+                "before adding configuration authors."
+            )
+
+    def _assign_author(self, item: ConfigAuthor) -> None:
+        email, editor = self._require_editor_by_email(item.author_email)
+        category_name, entry = self._require_entry_for_category(item.category_name)
+        style = normalize_plain_text(item.author_style_description)
+        if entry.author_email not in (None, email):
+            context = build_context(
+                category_name=entry.category_name, 
+                category_id=entry.category_id
+            )
+            raise AuthorCategoryDomainError(
+                f"Category already assigned to another author ({context})."
+            )
+        if email != entry.author_email:
+            self._guard_email_unique(email, category_name)
+        context = build_context(
+            author_email=email,
+            category_id=entry.category_id,
+            category_name=entry.category_name,
         )
-        self._persist_updated_entry(candidate, updated_entry)
+        updated = replace(
+            entry,
+            author_id=_merge_field("author_id", entry.author_id, str(editor.id), context),
+            author_email=_merge_field("author_email", entry.author_email, email, context),
+            author_style_description=_merge_field(
+                "author_style_description",
+                entry.author_style_description,
+                style,
+                context,
+            ),
+        )
+        self._entries[category_name] = updated
+        if updated.author_email:
+            self._email_to_category[updated.author_email] = category_name
 
-    def _persist_new_entry(self, new_entry: AuthorCategoryEntry) -> None:
-        self._record_entry_uniques(new_entry)
-        self._entries.append(new_entry)
+    def _guard_email_unique(self, email: str, category_name: str) -> None:
+        other_category = self._email_to_category.get(email)
+        if other_category is not None and other_category != category_name:
+            raise AuthorCategoryDomainError(
+                f"Author email {email} already assigned to category {other_category}."
+            )
 
-    def _persist_updated_entry(self, target: AuthorCategoryEntry, updated_entry: AuthorCategoryEntry) -> None:
-        index = self._index_of(target)
-        self._remove_entry_uniques(target)
-        try:
-            self._record_entry_uniques(updated_entry)
-        except AuthorCategoryDomainError:
-            self._record_entry_uniques(target)
-            raise
-        self._entries[index] = updated_entry
+    def _seed_entries_from_categories(self) -> None:
+        for category in self._categories.entries_snapshot():
+            existing = self._entries.get(category.name, AuthorCategoryEntry())
+            updated = replace(
+                existing,
+                category_id=category.id,
+                category_name=category.name,
+            )
+            self._entries[category.name] = updated
+            if updated.author_email:
+                self._email_to_category[updated.author_email] = category.name
 
-    def _record_entry_uniques(self, entry: AuthorCategoryEntry) -> None:
-        self._add_unique(self._unique_author_ids, entry.author_id, "author_id")
-        self._add_unique(self._unique_author_emails, entry.author_email, "author_email")
-        self._add_unique(self._unique_category_ids, entry.category_id, "category_id")
-        self._add_unique(self._unique_category_names, entry.category_name, "category_name")
+    def _require_entry_for_category(self, raw_category_name: str) -> tuple[str, AuthorCategoryEntry]:
+        category_name = normalize_category_name(raw_category_name)
+        if category_name is None:
+            raise AuthorCategoryDomainError("Config author is missing category name.")
+        entry = self._entries.get(category_name)
+        if entry is None:
+            raise AuthorCategoryDomainError(f"Category {raw_category_name!r} missing in WordPress data.")
+        return category_name, entry
 
-    def _remove_entry_uniques(self, entry: AuthorCategoryEntry) -> None:
-        self._discard_value(self._unique_author_ids, entry.author_id)
-        self._discard_value(self._unique_author_emails, entry.author_email)
-        self._discard_value(self._unique_category_ids, entry.category_id)
-        self._discard_value(self._unique_category_names, entry.category_name)
-
-    def _add_unique(self, container: set[str], value: Optional[str], field_name: str) -> None:
-        if value is None:
-            return
-        if value in container:
-            raise AuthorCategoryDomainError(f"Duplicate {field_name}: {value}")
-        container.add(value)
-
-    def _discard_value(self, container: set[str], value: Optional[str]) -> None:
-        if value is None:
-            return
-        container.discard(value)
-
-    def _index_of(self, entry: AuthorCategoryEntry) -> int:
-        for idx, current in enumerate(self._entries):
-            if current is entry:
-                return idx
-        raise ValueError("Target entry not managed by this aggregate.")
-
-    def _find_candidate_for_config(
-        self, author_email: Optional[str], category_name: Optional[str]
-    ) -> Optional[AuthorCategoryEntry]:
-        if author_email is not None:
-            found = self._find_by_author_email(author_email)
-            if found is not None:
-                return found
-        if category_name is not None:
-            return self._find_by_category_name_internal(category_name)
-        return None
-
-    def _find_candidate_for_editor(
-        self, author_id: Optional[str], author_email: Optional[str]
-    ) -> Optional[AuthorCategoryEntry]:
-        if author_id is not None:
-            found = self._find_by_author_id(author_id)
-            if found is not None:
-                return found
-        if author_email is not None:
-            return self._find_by_author_email(author_email)
-        return None
-
-    def _find_candidate_for_category(
-        self, category_id: Optional[str], category_name: Optional[str]
-    ) -> Optional[AuthorCategoryEntry]:
-        if category_id is not None:
-            found = self._find_by_category_id(category_id)
-            if found is not None:
-                return found
-        if category_name is not None:
-            return self._find_by_category_name_internal(category_name)
-        return None
-
-    def _find_by_author_email(self, author_email: str) -> Optional[AuthorCategoryEntry]:
-        for entry in self._entries:
-            if entry.author_email == author_email:
-                return entry
-        return None
-
-    def _find_by_author_id(self, author_id: str) -> Optional[AuthorCategoryEntry]:
-        for entry in self._entries:
-            if entry.author_id == author_id:
-                return entry
-        return None
-
-    def _find_by_category_id(self, category_id: str) -> Optional[AuthorCategoryEntry]:
-        for entry in self._entries:
-            if entry.category_id == category_id:
-                return entry
-        return None
-
-    def _find_by_category_name_internal(self, category_name: str) -> Optional[AuthorCategoryEntry]:
-        for entry in self._entries:
-            if entry.category_name == category_name:
-                return entry
-        return None
+    def _require_editor_by_email(self, raw_email: str) -> tuple[str, WordPressEditor]:
+        email = normalize_email(raw_email)
+        if email is None:
+            raise AuthorCategoryDomainError("Config author is missing email.")
+        editor = self._editors.find_by_email(email)
+        if editor is None:
+            raise AuthorCategoryDomainError(f"Author email {email!r} missing from WordPress editors.")
+        return email, editor
 
 
 def _merge_field(

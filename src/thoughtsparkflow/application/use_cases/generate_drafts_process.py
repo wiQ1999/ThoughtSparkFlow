@@ -127,23 +127,24 @@ class GenerateDraftsProcess:
 
             self.log.info("Loading file config (System)...")
             self.cfg = load_config()
-            self.log.debug("Local config loaded: %d authors", len(self.cfg.file.authors))
-
-            self.log.info("Validating config (System)...")
             if not self.cfg.env:
                 raise ProcessAbort("Environment file missing.")
             if not self.cfg.file:
                 raise ProcessAbort("Config file missing.")
             run_validations(self.cfg.file, checks=[check_authors_non_empty, check_unique_author_emails])
-            author_map.add_authors_from_config(
+            config_authors = [
                 ConfigAuthor(
                     author_email=str(author.email),
                     category_name=author.category,
                     author_style_description=author.style_description,
                 )
                 for author in self.cfg.file.authors
-            )
-            author_map.validate_complete_entries()
+            ]
+            author_map.add_authors_from_config(config_authors)
+            self.log.debug("Local config loaded: %d authors", len(self.cfg.file.authors))
+
+            self.log.info("Validating author/category map (System)...")
+            author_map.ensure_data_from_config_complete(config_authors)
             self.log.debug("Author/category map prepared: %d entries", len(author_map.entries_snapshot()))
 
             self.log.info("Fetching last topics (WordPress)...")
