@@ -4,7 +4,6 @@ import logging
 from typing import Iterable, Optional
 
 from thoughtsparkflow.config.loader import load_config
-from thoughtsparkflow.config.schemas import Author
 from thoughtsparkflow.config.validators import (
     check_authors_non_empty,
     check_unique_author_emails,

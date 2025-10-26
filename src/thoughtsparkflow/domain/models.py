@@ -7,7 +7,6 @@ from pydantic import BaseModel, EmailStr
 
 from .errors import AuthorCategoryDomainError
 from .helpers import (
-    build_context,
     normalize_category_name,
     normalize_email,
     normalize_plain_text,
