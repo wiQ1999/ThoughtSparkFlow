@@ -13,7 +13,8 @@ dependencies = [
   "pydantic[email]>=2.11",
   "pydantic-settings>=2.10",
   "PyYAML>=6.0",
-  "requests>=2.32"
+  "requests>=2.32",
+  "openai>=1.46.0"
 ]
 
 [tool.setuptools]
