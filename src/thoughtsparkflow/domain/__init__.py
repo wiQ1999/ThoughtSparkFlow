@@ -20,11 +20,11 @@ from .models import (
     ArticleDraft,
     AuthorCategoryEntry,
     AuthorCategoryMap,
-    ConfigAuthorInput,
+    ConfigAuthor,
     DraftsAggregator,
     GenerateDraftsResult,
-    WordPressCategoryInput,
-    WordPressEditorInput,
+    WordPressCategory,
+    WordPressEditor,
 )
 
 __all__ = [
@@ -33,7 +33,7 @@ __all__ = [
     "AuthorCategoryEntry",
     "AuthorCategoryMap",
     "CategoryResult",
-    "ConfigAuthorInput",
+    "ConfigAuthor",
     "ContentGenRequest",
     "DraftCreationRequest",
     "DraftsAggregator",
@@ -47,7 +47,7 @@ __all__ = [
     "TopicWithCategoryResult",
     "TopicsGenRequest",
     "TopicsRequest",
-    "WordPressCategoryInput",
-    "WordPressEditorInput",
+    "WordPressCategory",
+    "WordPressEditor",
     "WPPort",
 ]

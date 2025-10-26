@@ -14,22 +14,22 @@ from .helpers import (
 
 
 @dataclass(frozen=True)
-class ConfigAuthorInput:
-    author_email: Optional[str]
-    category_name: Optional[str]
-    author_style_description: Optional[str]
+class ConfigAuthor:
+    author_email: str
+    category_name: str
+    author_style_description: str
 
 
 @dataclass(frozen=True)
-class WordPressEditorInput:
-    author_id: Optional[str]
-    author_email: Optional[str]
+class WordPressEditor:
+    id: int
+    email: str
 
 
 @dataclass(frozen=True)
-class WordPressCategoryInput:
-    category_id: Optional[str]
-    category_name: Optional[str]
+class WordPressCategory:
+    id: str
+    name: str
 
 
 @dataclass
@@ -39,6 +39,80 @@ class AuthorCategoryEntry:
     author_style_description: Optional[str] = None
     category_id: Optional[str] = None
     category_name: Optional[str] = None
+
+
+class EditorList:
+    """Aggregate that keeps WordPressEditor items consistent and unique."""
+
+    def __init__(self) -> None:
+        self._entries: list[WordPressEditor] = []
+        self._unique_ids: set[int] = set()
+        self._unique_emails: set[str] = set()
+
+    def add_editor(self, item: WordPressEditor) -> None:
+        if item.id in self._unique_ids:
+            raise AuthorCategoryDomainError(f"Duplicate editor id: {item.id}")
+        if item.email in self._unique_emails:
+            raise AuthorCategoryDomainError(f"Duplicate editor email: {item.email}")
+        self._unique_ids.add(item.id)
+        self._unique_emails.add(item.email)
+        self._entries.append(item)
+
+    def add_editors(self, items: Iterable[WordPressEditor]) -> None:
+        for item in items:
+            self.add_editor(item)
+
+    def find_by_id(self, editor_id: int) -> Optional[WordPressEditor]:
+        for entry in self._entries:
+            if entry.id == editor_id:
+                return replace(entry)
+        return None
+    
+    def find_by_email(self, editor_email: str) -> Optional[WordPressEditor]:
+        for entry in self._entries:
+            if entry.email == editor_email:
+                return replace(entry)
+        return None
+
+    def entries_snapshot(self) -> tuple[WordPressEditor, ...]:
+        return tuple(replace(entry) for entry in self._entries)
+
+
+class CategoryList:
+    """Aggregate that keeps WordPressCategory items consistent and unique."""
+
+    def __init__(self) -> None:
+        self._entries: list[WordPressCategory] = []
+        self._unique_ids: set[int] = set()
+        self._unique_names: set[str] = set()
+
+    def add_category(self, item: WordPressCategory) -> None:
+        if item.id in self._unique_ids:
+            raise AuthorCategoryDomainError(f"Duplicate category id: {item.id}")
+        if item.name in self._unique_names:
+            raise AuthorCategoryDomainError(f"Duplicate category name: {item.name}")
+        self._unique_ids.add(item.id)
+        self._unique_names.add(item.name)
+        self._entries.append(item)
+
+    def add_categories(self, items: Iterable[WordPressCategory]) -> None:
+        for item in items:
+            self.add_category(item)
+
+    def find_by_id(self, category_id: int) -> Optional[WordPressCategory]:
+        for entry in self._entries:
+            if entry.id == category_id:
+                return replace(entry)
+        return None
+    
+    def find_by_name(self, category_name: str) -> Optional[WordPressCategory]:
+        for entry in self._entries:
+            if entry.name == category_name:
+                return replace(entry)
+        return None
+
+    def entries_snapshot(self) -> tuple[WordPressCategory, ...]:
+        return tuple(replace(entry) for entry in self._entries)
 
 
 class AuthorCategoryMap:
@@ -51,15 +125,15 @@ class AuthorCategoryMap:
         self._unique_category_ids: set[str] = set()
         self._unique_category_names: set[str] = set()
 
-    def add_authors_from_config(self, items: Iterable[ConfigAuthorInput]) -> None:
+    def add_authors_from_config(self, items: Iterable[ConfigAuthor]) -> None:
         for item in items:
             self._add_author_from_config(item)
 
-    def add_editors_from_wordpress(self, items: Iterable[WordPressEditorInput]) -> None:
+    def add_editors_from_wordpress(self, items: Iterable[WordPressEditor]) -> None:
         for item in items:
             self._add_editor_from_wordpress(item)
 
-    def add_categories_from_wordpress(self, items: Iterable[WordPressCategoryInput]) -> None:
+    def add_categories_from_wordpress(self, items: Iterable[WordPressCategory]) -> None:
         for item in items:
             self._add_category_from_wordpress(item)
 
@@ -94,7 +168,7 @@ class AuthorCategoryMap:
                 return replace(entry)
         return None
 
-    def _add_author_from_config(self, item: ConfigAuthorInput) -> None:
+    def _add_author_from_config(self, item: ConfigAuthor) -> None:
         email = normalize_email(item.author_email)
         category_name = normalize_category_name(item.category_name)
         style = normalize_plain_text(item.author_style_description)
@@ -111,17 +185,30 @@ class AuthorCategoryMap:
 
         updated_entry = replace(
             candidate,
-            author_email=_merge_field("author_email", candidate.author_email, email, context),
-            author_style_description=_merge_field(
-                "author_style_description", candidate.author_style_description, style, context
+            author_email=_merge_field(
+                "author_email", 
+                candidate.author_email, 
+                email, 
+                context
             ),
-            category_name=_merge_field("category_name", candidate.category_name, category_name, context),
+            author_style_description=_merge_field(
+                "author_style_description", 
+                candidate.author_style_description, 
+                style, 
+                context
+            ),
+            category_name=_merge_field(
+                "category_name", 
+                candidate.category_name, 
+                category_name, 
+                context
+            ),
         )
         self._persist_updated_entry(candidate, updated_entry)
 
-    def _add_editor_from_wordpress(self, item: WordPressEditorInput) -> None:
-        author_id = normalize_plain_text(item.author_id)
-        email = normalize_email(item.author_email)
+    def _add_editor_from_wordpress(self, item: WordPressEditor) -> None:
+        author_id = normalize_plain_text(item.id)
+        email = normalize_email(item.email)
         candidate = self._find_candidate_for_editor(author_id, email)
         context = build_context(author_id=author_id, author_email=email)
         if candidate is None:
@@ -136,9 +223,9 @@ class AuthorCategoryMap:
         )
         self._persist_updated_entry(candidate, updated_entry)
 
-    def _add_category_from_wordpress(self, item: WordPressCategoryInput) -> None:
-        category_id = normalize_plain_text(item.category_id)
-        category_name = normalize_category_name(item.category_name)
+    def _add_category_from_wordpress(self, item: WordPressCategory) -> None:
+        category_id = normalize_plain_text(item.id)
+        category_name = normalize_category_name(item.name)
         candidate = self._find_candidate_for_category(category_id, category_name)
         context = build_context(category_id=category_id, category_name=category_name)
         if candidate is None:

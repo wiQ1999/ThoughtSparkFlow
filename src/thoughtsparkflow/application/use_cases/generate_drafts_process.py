@@ -14,11 +14,11 @@ from thoughtsparkflow.domain.helpers import ensure_positive_int
 from thoughtsparkflow.domain.models import (
     AuthorCategoryEntry,
     AuthorCategoryMap,
-    ConfigAuthorInput,
+    ConfigAuthor,
     DraftsAggregator,
     GenerateDraftsResult,
-    WordPressCategoryInput,
-    WordPressEditorInput,
+    WordPressCategory,
+    WordPressEditor,
 )
 from thoughtsparkflow.domain.ports import (
     CategoryResult,
@@ -105,9 +105,9 @@ class GenerateDraftsProcess:
             editors: list[EditorResult] = list(self.wp.get_all_editors())
             _ensure_non_empty("get_all_editors", editors)
             author_map.add_editors_from_wordpress(
-                WordPressEditorInput(
-                    author_id=str(editor.id),
-                    author_email=str(editor.email),
+                WordPressEditor(
+                    id=str(editor.id),
+                    email=str(editor.email),
                 )
                 for editor in editors
             )
@@ -117,9 +117,9 @@ class GenerateDraftsProcess:
             categories: list[CategoryResult] = list(self.wp.get_all_categories())
             _ensure_non_empty("get_all_categories", categories)
             author_map.add_categories_from_wordpress(
-                WordPressCategoryInput(
-                    category_id=str(category.id),
-                    category_name=category.name,
+                WordPressCategory(
+                    id=str(category.id),
+                    name=category.name,
                 )
                 for category in categories
             )
@@ -136,7 +136,7 @@ class GenerateDraftsProcess:
                 raise ProcessAbort("Config file missing.")
             run_validations(self.cfg.file, checks=[check_authors_non_empty, check_unique_author_emails])
             author_map.add_authors_from_config(
-                ConfigAuthorInput(
+                ConfigAuthor(
                     author_email=str(author.email),
                     category_name=author.category,
                     author_style_description=author.style_description,
