@@ -1,4 +1,5 @@
 # Activate script: `.\.venv\Scripts\Activate.ps1`. 
+# Install or upgrade env: `python pip install -e .`
 # Run with: `python -m thoughtsparkflow`
 
 from __future__ import annotations
@@ -8,6 +9,9 @@ import logging
 from thoughtsparkflow.application.use_cases.generate_drafts_process import GenerateDraftsProcess
 from thoughtsparkflow.config.loader import load_config
 from thoughtsparkflow.infrastructure.cms.wordpress_adapter import WordPressAdapter, WordPressAdapterConfig
+from thoughtsparkflow.infrastructure.genai import OpenAIWebAPIConfig
+from thoughtsparkflow.infrastructure.genai.image_adapter import OpenAIImageGenerator
+from thoughtsparkflow.infrastructure.genai.text_adapter import OpenAITextGenerator
 
 
 def main() -> int:
@@ -20,16 +24,19 @@ def main() -> int:
 
     cfg = load_config()
 
+    wp_adapter = WordPressAdapter(
+        WordPressAdapterConfig(
+            base_url=str(cfg.env.wp_api_url),
+            user=cfg.env.wp_user,
+            password=cfg.env.wp_password,
+        )
+    )
+    openai_cfg = OpenAIWebAPIConfig(api_key=cfg.env.openai_api_key)
+
     process = GenerateDraftsProcess(
-        wp=WordPressAdapter(
-            WordPressAdapterConfig(
-                base_url=str(cfg.env.wp_api_url),
-                user=cfg.env.wp_user,
-                password=cfg.env.wp_password,
-            )
-        ),
-        text=None,
-        img=None,
+        wp=wp_adapter,
+        text=OpenAITextGenerator(openai_cfg),
+        img=OpenAIImageGenerator(openai_cfg),
         log=log,
     )
 
