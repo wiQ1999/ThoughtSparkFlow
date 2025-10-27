@@ -22,10 +22,14 @@ class OpenAIImageGenerator(ImageGenPort):
         self.client = OpenAIWebAPIClient(cfg)
 
     def generate_image(self, request: ImageRequest) -> bytes:
-        payload = {
-            "topic": request.topic,
+        input_data = {
+            "id": _IMAGE_PROMPT_ID,
+            "version": "10",
+            "variables": {
+                "topic": request.topic,
+            }
         }
-        response = self.client.run_prompt(_IMAGE_PROMPT_ID, payload)
+        response = self.client.run_prompt(input_data)
         image_bytes = self.client.extract_image_bytes(response)
         log.debug("OpenAI image generated for topic=%r (%d bytes)", request.topic, len(image_bytes))
         return image_bytes

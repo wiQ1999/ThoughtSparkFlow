@@ -33,23 +33,31 @@ class OpenAITextGenerator(TextGenPort):
         self.client = OpenAIWebAPIClient(cfg)
 
     def generate_topics(self, request: TopicsGenRequest) -> Iterable[TopicWithCategoryResult]:
-        payload = {
-            "last_topics": request.last_topics,
-            "categories": request.categories,
+        input_data = {
+            "id": _TOPICS_PROMPT_ID,
+            "version": "8",
+            "variables": {
+                "categories": ", ".join(request.categories),
+                "last_topics": ", ".join(f'"{x}"' for x in request.last_topics),
+            }
         }
-        response = self.client.run_prompt(_TOPICS_PROMPT_ID, payload)
+        response = self.client.run_prompt(input_data)
         raw_output = self.client.extract_text(response)
         topics = self._parse_topics(raw_output)
         log.debug("OpenAI generated %d topic candidates", len(topics))
         return topics
 
     def generate_content(self, request: ContentGenRequest) -> str:
-        payload = {
-            "topic": request.topic,
-            "category": request.category,
-            "style_description": request.style_descritpion,
+        input_data = {
+            "id": _CONTENT_PROMPT_ID,
+            "version": "12",
+            "variables": {
+                "topic": request.topic,
+                "category": request.category,
+                "style_description": request.style_descritpion,
+            }
         }
-        response = self.client.run_prompt(_CONTENT_PROMPT_ID, payload)
+        response = self.client.run_prompt(input_data)
         content = self.client.extract_text(response)
         if not content:
             raise OpenAIWebAPIError(200, "OpenAI content prompt returned empty text", response)

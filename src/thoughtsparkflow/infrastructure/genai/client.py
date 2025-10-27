@@ -50,14 +50,13 @@ class OpenAIWebAPIClient:
         self.session = requests.Session()
         self.session.headers.update({"Accept": "application/json"})
 
-    def run_prompt(self, prompt_id: str, input_data: Dict[str, Any]) -> dict:
+    def run_prompt(self, input_data: Dict[str, Any]) -> dict:
         """Execute a stored prompt and return the raw JSON payload."""
 
-        log.debug("Calling OpenAI prompt=%s", prompt_id)
+        log.debug("Calling OpenAI prompt with data=%s", input_data)
         try:
             response = self.client.responses.create(
-                prompt=prompt_id, 
-                input=input_data
+                prompt=input_data
             )
         except OpenAIError as exc:
             raise OpenAIWebAPIError(
