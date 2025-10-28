@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 from typing import Iterable, List
 
@@ -33,22 +32,23 @@ class OpenAITextGenerator(TextGenPort):
         self.client = OpenAIWebAPIClient(cfg)
 
     def generate_topics(self, request: TopicsGenRequest) -> Iterable[TopicWithCategoryResult]:
-        input_data = {
+        prompt = {
             "id": _TOPICS_PROMPT_ID,
-            "version": "8",
+            "version": "11",
             "variables": {
                 "categories": ", ".join(request.categories),
                 "last_topics": ", ".join(f'"{x}"' for x in request.last_topics),
             }
         }
-        response = self.client.run_prompt(input_data)
-        raw_output = self.client.extract_text(response)
-        topics = self._parse_topics(raw_output)
+        input = "Wygeneruj w formacie json."
+        response = self.client.run_prompt(prompt, input)
+        topics_payload = self.client.extract_json(response)
+        topics = self._parse_topics(topics_payload)
         log.debug("OpenAI generated %d topic candidates", len(topics))
         return topics
 
     def generate_content(self, request: ContentGenRequest) -> str:
-        input_data = {
+        prompt = {
             "id": _CONTENT_PROMPT_ID,
             "version": "12",
             "variables": {
@@ -57,7 +57,8 @@ class OpenAITextGenerator(TextGenPort):
                 "style_description": request.style_descritpion,
             }
         }
-        response = self.client.run_prompt(input_data)
+        response = self.client.run_prompt(prompt)
+        log.debug("Response content: %s", response)
         content = self.client.extract_text(response)
         if not content:
             raise OpenAIWebAPIError(200, "OpenAI content prompt returned empty text", response)
@@ -65,29 +66,30 @@ class OpenAITextGenerator(TextGenPort):
         return content
 
     @staticmethod
-    def _parse_topics(raw_output: str) -> List[TopicWithCategoryResult]:
-        try:
-            data = json.loads(raw_output)
-        except json.JSONDecodeError as exc:
-            raise OpenAIWebAPIError(200, "OpenAI topics prompt returned invalid JSON", {"text": raw_output}) from exc
+    def _parse_topics(data: object) -> List[TopicWithCategoryResult]:
+        if not isinstance(data, dict):
+            raise OpenAIWebAPIError(200, "OpenAI topics prompt returned invalid structure", {"payload": data})
 
-        if not isinstance(data, list):
-            raise OpenAIWebAPIError(200, "OpenAI topics prompt must return a JSON array", data)
+        raw_items = data.get("items")
+        if not isinstance(raw_items, list):
+            raise OpenAIWebAPIError(
+                200,
+                "OpenAI topics prompt returned payload without 'items' list",
+                {"payload": data},
+            )
 
-        results: list[TopicWithCategoryResult] = []
-        for idx, entry in enumerate(data):
-            if not isinstance(entry, dict):
-                log.debug("Skipping topic entry index=%d because it is not an object: %r", idx, entry)
+        topics: List[TopicWithCategoryResult] = []
+        for index, item in enumerate(raw_items):
+            if not isinstance(item, dict):
+                log.warning("Skipping topics item at index %d: expected object, got %s", index, type(item).__name__)
                 continue
-            payload = {
-                "topic": entry.get("topic") or entry.get("title"),
-                "category": entry.get("category") or entry.get("tag"),
-            }
             try:
-                results.append(TopicWithCategoryResult(**payload))
+                if hasattr(TopicWithCategoryResult, "model_validate"):
+                    parsed = TopicWithCategoryResult.model_validate(item)  # type: ignore[attr-defined]
+                else:
+                    parsed = TopicWithCategoryResult.parse_obj(item)  # type: ignore[attr-defined]
             except ValidationError as exc:
-                log.warning("Invalid topic entry at index=%d from OpenAI: %s -- payload=%s", idx, exc, entry)
-
-        if not results:
-            raise OpenAIWebAPIError(200, "OpenAI topics prompt produced no valid topics", data)
-        return results
+                log.warning("Skipping topics item at index %d due to validation error: %s", index, exc)
+                continue
+            topics.append(parsed)
+        return topics

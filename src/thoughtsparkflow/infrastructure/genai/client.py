@@ -50,13 +50,14 @@ class OpenAIWebAPIClient:
         self.session = requests.Session()
         self.session.headers.update({"Accept": "application/json"})
 
-    def run_prompt(self, input_data: Dict[str, Any]) -> dict:
+    def run_prompt(self, prompt: Dict[str, Any], input: str = None) -> dict:
         """Execute a stored prompt and return the raw JSON payload."""
 
-        log.debug("Calling OpenAI prompt with data=%s", input_data)
+        log.debug("Calling OpenAI prompt with data=%s; input=%s", prompt, input)
         try:
             response = self.client.responses.create(
-                prompt=input_data
+                prompt=prompt,
+                input=input
             )
         except OpenAIError as exc:
             raise OpenAIWebAPIError(
@@ -83,6 +84,46 @@ class OpenAIWebAPIClient:
                 response_payload
             )
         return result
+
+    def extract_json(self, response_payload: dict) -> Any:
+        """Return the first JSON content block from a responses payload."""
+
+        for content in self._iter_content_blocks(response_payload):
+            content_type = content.get("type")
+            if content_type in {"output_json", "json"}:
+                value = content.get("json")
+                if isinstance(value, (dict, list)):
+                    return value
+                if isinstance(value, str):
+                    try:
+                        return json.loads(value)
+                    except json.JSONDecodeError as exc:
+                        raise OpenAIWebAPIError(
+                            200,
+                            "OpenAI response returned invalid JSON string",
+                            {"json": value},
+                        ) from exc
+                if value is not None:
+                    raise OpenAIWebAPIError(
+                        200,
+                        "OpenAI response returned unsupported JSON payload type",
+                        {"json": value},
+                    )
+            if content_type in {"output_text", "text"}:
+                text = content.get("text")
+                if isinstance(text, str):
+                    stripped = text.strip()
+                    if not stripped:
+                        continue
+                    try:
+                        return json.loads(stripped)
+                    except json.JSONDecodeError:
+                        continue
+        raise OpenAIWebAPIError(
+            200,
+            "OpenAI response did not include JSON output",
+            response_payload,
+        )
 
     def extract_image_bytes(self, response_payload: dict) -> bytes:
         """Return the first image output as raw bytes."""
