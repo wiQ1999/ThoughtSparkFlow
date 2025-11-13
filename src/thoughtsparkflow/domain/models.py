@@ -137,11 +137,12 @@ class AuthorCategoryMap:
         for item in items:
             category = self._sanitize_category(item)
             self._categories.add_category(category)
-        self._seed_entries_from_categories()
         self._wp_categories_loaded = True
 
     def add_authors_from_config(self, items: Iterable[ConfigAuthor]) -> None:
         self._ensure_wordpress_bootstrapped()
+        self._entries.clear()
+        self._email_to_category.clear()
         for item in items:
             self._assign_author(item)
 
@@ -159,15 +160,27 @@ class AuthorCategoryMap:
             if normalized_category in inspected_categories:
                 continue
             inspected_categories.add(normalized_category)
+            category = self._categories.find_by_name(normalized_category)
+            if category is None:
+                errors.append(f"{label}: category missing in WordPress data.")
+                continue
             entry = self._entries.get(normalized_category)
             if entry is None:
-                errors.append(f"{label}: category missing in WordPress data.")
+                errors.append(f"{label}: configuration entry missing.")
                 continue
             missing_fields: list[str] = []
             if entry.category_id is None:
                 missing_fields.append("category_id")
+            elif entry.category_id != category.id:
+                missing_fields.append(
+                    f"category_id mismatch (expected {category.id}, got {entry.category_id})"
+                )
             if entry.category_name is None:
                 missing_fields.append("category_name")
+            elif entry.category_name != category.name:
+                missing_fields.append(
+                    f"category_name mismatch (expected {category.name}, got {entry.category_name})"
+                )
             if entry.author_id is None:
                 missing_fields.append("author_id")
             if entry.author_email is None:
@@ -185,12 +198,17 @@ class AuthorCategoryMap:
                 "Incomplete author/category configuration: " + " | ".join(errors)
             )
 
-    def find_by_category_name(self, category_name: str) -> Optional[AuthorCategoryEntry]:
+    def find_by_category_name(
+        self, category_name: str
+    ) -> Optional[AuthorCategoryEntry]:
         normalized_name = normalize_category_name(category_name)
         if normalized_name is None:
             return None
         entry = self._entries.get(normalized_name)
         return replace(entry) if entry else None
+    
+    def get_categories(self) -> list[str]:
+        return list(self._entries.keys())
 
     def entries_snapshot(self) -> tuple[AuthorCategoryEntry, ...]:
         return tuple(replace(entry) for entry in self._entries.values())
@@ -249,8 +267,18 @@ class AuthorCategoryMap:
         )
         updated = replace(
             entry,
-            author_id=_merge_field("author_id", entry.author_id, str(editor.id), context),
-            author_email=_merge_field("author_email", entry.author_email, email, context),
+            author_id=_merge_field(
+                "author_id", 
+                entry.author_id, 
+                str(editor.id), 
+                context
+            ),
+            author_email=_merge_field(
+                "author_email", 
+                entry.author_email, 
+                email, 
+                context
+            ),
             author_style_description=_merge_field(
                 "author_style_description",
                 entry.author_style_description,
@@ -269,34 +297,57 @@ class AuthorCategoryMap:
                 f"Author email {email} already assigned to category {other_category}."
             )
 
-    def _seed_entries_from_categories(self) -> None:
-        for category in self._categories.entries_snapshot():
-            existing = self._entries.get(category.name, AuthorCategoryEntry())
-            updated = replace(
-                existing,
-                category_id=category.id,
-                category_name=category.name,
-            )
-            self._entries[category.name] = updated
-            if updated.author_email:
-                self._email_to_category[updated.author_email] = category.name
-
-    def _require_entry_for_category(self, raw_category_name: str) -> tuple[str, AuthorCategoryEntry]:
+    def _require_entry_for_category(
+        self, raw_category_name: str
+    ) -> tuple[str, AuthorCategoryEntry]:
         category_name = normalize_category_name(raw_category_name)
         if category_name is None:
-            raise AuthorCategoryDomainError("Config author is missing category name.")
+            raise AuthorCategoryDomainError(
+                "Config author is missing category name."
+            )
+        category = self._categories.find_by_name(category_name)
+        if category is None:
+            raise AuthorCategoryDomainError(
+                f"Category {raw_category_name!r} missing in WordPress data."
+            )
         entry = self._entries.get(category_name)
         if entry is None:
-            raise AuthorCategoryDomainError(f"Category {raw_category_name!r} missing in WordPress data.")
-        return category_name, entry
+            entry = AuthorCategoryEntry()
+        context = build_context(
+            category_id=category.id, 
+            category_name=category.name
+        )
+        updated = replace(
+            entry,
+            category_id=_merge_field(
+                "category_id",
+                entry.category_id,
+                category.id,
+                context,
+            ),
+            category_name=_merge_field(
+                "category_name",
+                entry.category_name,
+                category.name,
+                context,
+            ),
+        )
+        self._entries[category_name] = updated
+        return category_name, updated
 
-    def _require_editor_by_email(self, raw_email: str) -> tuple[str, WordPressEditor]:
+    def _require_editor_by_email(
+        self, raw_email: str
+    ) -> tuple[str, WordPressEditor]:
         email = normalize_email(raw_email)
         if email is None:
-            raise AuthorCategoryDomainError("Config author is missing email.")
+            raise AuthorCategoryDomainError(
+                "Config author is missing email."
+            )
         editor = self._editors.find_by_email(email)
         if editor is None:
-            raise AuthorCategoryDomainError(f"Author email {email!r} missing from WordPress editors.")
+            raise AuthorCategoryDomainError(
+                f"Author email {email!r} missing from WordPress editors."
+            )
         return email, editor
 
 
@@ -312,7 +363,10 @@ def _merge_field(
         return incoming_value
     if existing_value == incoming_value:
         return existing_value
-    message = f"Field mismatch for {field_name}: existing={existing_value}, incoming={incoming_value}"
+    message = (
+        f"Field mismatch for {field_name}: "
+        f"existing={existing_value}, incoming={incoming_value}"
+    )
     if context:
         message = f"{message} for {context}"
     raise AuthorCategoryDomainError(message)
@@ -356,7 +410,13 @@ class DraftsAggregator:
     def __init__(self) -> None:
         self._items: dict[str, ArticleDraft] = {}
 
-    def start(self, *, subject: str, category_id: Optional[int] = None, category_name: Optional[str] = None) -> ArticleDraft:
+    def start(
+        self,
+        *,
+        subject: str,
+        category_id: Optional[int] = None,
+        category_name: Optional[str] = None,
+    ) -> ArticleDraft:
         key = subject.strip()
         if key in self._items:
             return self._items[key]

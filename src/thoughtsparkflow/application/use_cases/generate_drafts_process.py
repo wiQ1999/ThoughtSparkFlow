@@ -102,28 +102,28 @@ class GenerateDraftsProcess:
 
         try:
             self.log.info("Fetching editors (WordPress)...")
-            editors: list[EditorResult] = list(self.wp.get_all_editors())
-            _ensure_non_empty("get_all_editors", editors)
+            wp_editors: list[EditorResult] = list(self.wp.get_all_editors())
+            _ensure_non_empty("get_all_editors", wp_editors)
             author_map.add_editors_from_wordpress(
                 WordPressEditor(
                     id=str(editor.id),
                     email=str(editor.email),
                 )
-                for editor in editors
+                for editor in wp_editors
             )
-            self.log.debug("Editors fetched: %d", len(editors))
+            self.log.debug("Editors fetched: %d", len(wp_editors))
 
             self.log.info("Fetching categories (WordPress)...")
-            categories: list[CategoryResult] = list(self.wp.get_all_categories())
-            _ensure_non_empty("get_all_categories", categories)
+            wp_categories: list[CategoryResult] = list(self.wp.get_all_categories())
+            _ensure_non_empty("get_all_categories", wp_categories)
             author_map.add_categories_from_wordpress(
                 WordPressCategory(
                     id=str(category.id),
                     name=category.name,
                 )
-                for category in categories
+                for category in wp_categories
             )
-            self.log.debug("Categories fetched: %d", len(categories))
+            self.log.debug("Categories fetched: %d", len(wp_categories))
 
             self.log.info("Loading file config (System)...")
             self.cfg = load_config()
@@ -132,7 +132,7 @@ class GenerateDraftsProcess:
             if not self.cfg.file:
                 raise ProcessAbort("Config file missing.")
             run_validations(self.cfg.file, checks=[check_authors_non_empty, check_unique_author_emails])
-            config_authors = [
+            cfg_authors = [
                 ConfigAuthor(
                     author_email=str(author.email),
                     category_name=author.category,
@@ -140,11 +140,12 @@ class GenerateDraftsProcess:
                 )
                 for author in self.cfg.file.authors
             ]
-            author_map.add_authors_from_config(config_authors)
+            author_map.add_authors_from_config(cfg_authors)
             self.log.debug("Local config loaded: %d authors", len(self.cfg.file.authors))
 
             self.log.info("Validating author/category map (System)...")
-            author_map.ensure_data_from_config_complete(config_authors)
+            author_map.ensure_data_from_config_complete(cfg_authors)
+            categories = author_map.get_categories()
             self.log.debug("Author/category map prepared: %d entries", len(author_map.entries_snapshot()))
 
             self.log.info("Fetching last topics (WordPress)...")
@@ -158,14 +159,12 @@ class GenerateDraftsProcess:
             )
             self.log.debug("Last topics fetched: %d", len(last_topics))
 
-            category_names = [category.name for category in categories]
-
             self.log.info("Generating new topics (OpenAI)...")
             topic_with_category_results = list(
                 self.text.generate_topics(
                     TopicsGenRequest(
                         last_topics=last_topics,
-                        categories=category_names,
+                        categories=categories,
                         propmpt_id=TOPICS_PROMPT_ID,
                     )
                 )
