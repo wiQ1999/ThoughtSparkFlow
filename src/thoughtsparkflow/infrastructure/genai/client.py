@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Iterable, Optional
 
 import requests
-from openai import OpenAI, OpenAIError
+from openai import Omit, OpenAI, OpenAIError
 
 __all__ = [
     "OpenAIWebAPIConfig",
@@ -50,7 +50,7 @@ class OpenAIWebAPIClient:
         self.session = requests.Session()
         self.session.headers.update({"Accept": "application/json"})
 
-    def run_prompt(self, prompt: Dict[str, Any], input: str = None) -> dict:
+    def run_prompt(self, prompt: Dict[str, Any], input: str = Omit) -> dict:
         """Execute a stored prompt and return the raw JSON payload."""
 
         log.debug("Calling OpenAI prompt with data=%s; input=%s", prompt, input)
