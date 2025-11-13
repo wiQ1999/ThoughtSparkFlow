@@ -424,10 +424,10 @@ class DraftsAggregator:
         self._items[key] = item
         return item
 
-    def set_author(self, *, subject: str, author_id: int, author_email: EmailStr) -> ArticleDraft:
+    def set_author(self, *, subject: str, author_id: int, author_email: str) -> ArticleDraft:
         d = self._require(subject)
         d.author_id = int(author_id)
-        d.author_email = EmailStr(str(author_email))
+        d.author_email = author_email
         return d
 
     def set_content(self, *, subject: str, content: str) -> ArticleDraft:
