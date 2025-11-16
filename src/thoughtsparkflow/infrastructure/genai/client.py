@@ -171,7 +171,6 @@ class OpenAIWebAPIClient:
     def _to_payload(response: Any) -> dict:
         if isinstance(response, dict):
             return response
-        dump = None
         if hasattr(response, "model_dump"):
             dump = response.model_dump()
         elif hasattr(response, "dict"):
@@ -180,7 +179,11 @@ class OpenAIWebAPIClient:
             try:
                 dump = json.loads(response.json())
             except ValueError:
-                dump = None
+                raise OpenAIWebAPIError(
+                    500,
+                    f"Unable to parse OpenAI response payload (type={type(response).__name__}, value={repr(response)})",
+                    {"type": str(type(response)), "value": repr(response)}
+                )
         if isinstance(dump, dict):
             return dump
         raise OpenAIWebAPIError(500, "Unable to parse OpenAI response payload", {"type": str(type(response))})
