@@ -135,14 +135,14 @@ class OpenAIWebAPIClient:
     def extract_image_bytes(self, response_payload: dict) -> bytes:
         """Return the first image output as raw bytes."""
 
-        for content in self._iter_content_blocks(response_payload):
-            if content.get("type") == "output_image":
-                inline = content.get("image_base64") or content.get("b64_json")
-                if isinstance(inline, str):
-                    return base64.b64decode(inline)
-                image_url = self._resolve_image_url(content)
-                if image_url:
-                    return self._fetch_binary(image_url)
+        image_data = [
+            output.result
+            for output in response_payload.output
+            if output.type == "image_generation_call"
+        ]
+        if image_data:
+            image_base64 = image_data[0]
+            return base64.b64decode(image_base64)
         raise OpenAIWebAPIError(
             200, 
             "OpenAI response did not include image output", 
