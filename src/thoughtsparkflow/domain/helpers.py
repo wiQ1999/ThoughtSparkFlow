@@ -23,6 +23,15 @@ def normalize_category_name(value: Optional[str]) -> Optional[str]:
         return None
     return plain.casefold()
 
+def safe_int(value: Optional[int | str]) -> Optional[int]:
+    if value is None:
+        return None
+    try:
+        integer = int(value)
+    except (TypeError, ValueError):
+        return None
+    return integer if integer >= 0 else None
+
 def safe_id(value: Optional[int | str]) -> Optional[int]:
     if value is None:
         return None
