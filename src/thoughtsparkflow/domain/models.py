@@ -10,7 +10,7 @@ from .helpers import (
     normalize_category_name,
     normalize_email,
     normalize_plain_text,
-    safe_int,
+    safe_id,
 )
 
 
@@ -29,7 +29,7 @@ class WordPressEditor:
 
 @dataclass(frozen=True)
 class WordPressCategory:
-    id: str
+    id: int
     name: str
 
 
@@ -219,7 +219,7 @@ class AuthorCategoryMap:
             raise AuthorCategoryDomainError(
                 "WordPress editor email is missing."
             )
-        editor_id = safe_int(item.id)
+        editor_id = safe_id(item.id)
         if editor_id is None:
             raise AuthorCategoryDomainError(
                 f"Invalid WordPress editor id: {item.id!r}"
@@ -227,17 +227,12 @@ class AuthorCategoryMap:
         return WordPressEditor(id=editor_id, email=email)
 
     def _sanitize_category(self, item: WordPressCategory) -> WordPressCategory:
-        category_id = normalize_plain_text(str(item.id))
-        if category_id is None:
-            raise AuthorCategoryDomainError(
-                "WordPress category id is missing."
-            )
         category_name = normalize_category_name(item.name)
         if category_name is None:
             raise AuthorCategoryDomainError(
                 "WordPress category name is missing."
             )
-        return WordPressCategory(id=category_id, name=category_name)
+        return WordPressCategory(id=item.id, name=category_name)
 
     def _ensure_wordpress_bootstrapped(self) -> None:
         if not self._wp_editors_loaded or not self._wp_categories_loaded:
@@ -313,8 +308,9 @@ class AuthorCategoryMap:
         entry = self._entries.get(category_name)
         if entry is None:
             entry = AuthorCategoryEntry()
+        category_id_str = str(category.id)
         context = build_context(
-            category_id=category.id, 
+            category_id=category_id_str, 
             category_name=category.name
         )
         updated = replace(
@@ -322,7 +318,7 @@ class AuthorCategoryMap:
             category_id=_merge_field(
                 "category_id",
                 entry.category_id,
-                category.id,
+                category_id_str,
                 context,
             ),
             category_name=_merge_field(

@@ -10,7 +10,10 @@ from thoughtsparkflow.config.validators import (
     run_validations,
 )
 from thoughtsparkflow.domain.errors import AuthorCategoryDomainError
-from thoughtsparkflow.domain.helpers import ensure_positive_int
+from thoughtsparkflow.domain.helpers import (
+    ensure_positive_int, 
+    ensure_non_empty_text
+)
 from thoughtsparkflow.domain.models import (
     AuthorCategoryEntry,
     AuthorCategoryMap,
@@ -102,11 +105,11 @@ class GenerateDraftsProcess:
 
         try:
             self.log.info("Fetching editors (WordPress)...")
-            wp_editors: list[EditorResult] = list(self.wp.get_all_editors())
+            wp_editors = list(self.wp.get_all_editors())
             _ensure_non_empty("get_all_editors", wp_editors)
             author_map.add_editors_from_wordpress(
                 WordPressEditor(
-                    id=str(editor.id),
+                    id=editor.id,
                     email=str(editor.email),
                 )
                 for editor in wp_editors
@@ -114,11 +117,11 @@ class GenerateDraftsProcess:
             self.log.debug("Editors fetched: %d", len(wp_editors))
 
             self.log.info("Fetching categories (WordPress)...")
-            wp_categories: list[CategoryResult] = list(self.wp.get_all_categories())
+            wp_categories = list(self.wp.get_all_categories())
             _ensure_non_empty("get_all_categories", wp_categories)
             author_map.add_categories_from_wordpress(
                 WordPressCategory(
-                    id=str(category.id),
+                    id=category.id,
                     name=category.name,
                 )
                 for category in wp_categories
@@ -180,14 +183,20 @@ class GenerateDraftsProcess:
                     entry = _require_link(author_map, item.category)
                     category_id = ensure_positive_int(entry.category_id, "category_id")
                     editor_id = ensure_positive_int(entry.author_id, "author_id")
+                    author_email = ensure_non_empty_text(entry.author_email, "author_email")
+                    author_style = ensure_non_empty_text(entry.author_style_description, "author_style_description")
                     draft.category_id = category_id
-                    drafts.set_author(subject=item.topic, author_id=editor_id, author_email=entry.author_email)
+                    drafts.set_author(
+                        subject=item.topic, 
+                        author_id=editor_id, 
+                        author_email=author_email
+                    )
 
                     self.log.debug("Generating content for topic=%r category=%r", item.topic, item.category)
                     content = self.text.generate_content(
                         ContentGenRequest(
                             topic=item.topic,
-                            style_descritpion=entry.author_style_description,
+                            style_descritpion=author_style,
                             category=item.category,
                             propmpt_id=CONTENT_PROMPT_ID,
                         )

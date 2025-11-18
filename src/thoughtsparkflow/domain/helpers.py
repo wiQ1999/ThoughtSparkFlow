@@ -23,7 +23,9 @@ def normalize_category_name(value: Optional[str]) -> Optional[str]:
         return None
     return plain.casefold()
 
-def safe_int(value: object) -> Optional[int]:
+def safe_id(value: Optional[int | str]) -> Optional[int]:
+    if value is None:
+        return None
     try:
         integer = int(value)
     except (TypeError, ValueError):
@@ -31,7 +33,9 @@ def safe_int(value: object) -> Optional[int]:
     return integer if integer >= 0 else None
 
 
-def ensure_positive_int(value: int | str, field: str) -> int:
+def ensure_positive_int(value: Optional[int | str], field: str) -> int:
+    if value is None:
+        raise ValueError(f"{field} must not be None.")
     try:
         integer = int(value)
     except (TypeError, ValueError) as exc:
@@ -39,3 +43,10 @@ def ensure_positive_int(value: int | str, field: str) -> int:
     if integer <= 0:
         raise ValueError(f"{field} must be a positive integer")
     return integer
+
+
+def ensure_non_empty_text(value: Optional[str], field: str) -> str:
+    plain = normalize_plain_text(value)
+    if plain is None:
+        raise ValueError(f"{field} must not be empty.")
+    return plain

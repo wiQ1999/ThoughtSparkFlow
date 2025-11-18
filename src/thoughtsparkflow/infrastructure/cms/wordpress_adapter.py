@@ -10,7 +10,7 @@ import requests
 from requests.auth import HTTPBasicAuth
 from requests import Response
 
-from thoughtsparkflow.domain.helpers import ensure_positive_int, normalize_category_name, normalize_email, safe_int
+from thoughtsparkflow.domain.helpers import ensure_positive_int, normalize_category_name, normalize_email, safe_id
 from thoughtsparkflow.domain.ports import (
     WPPort,
     EditorResult,
@@ -65,7 +65,7 @@ class WordPressAdapter(WPPort):
         }
         results: List[EditorResult] = []
         for item in self._paginate("/wp-json/wp/v2/users", params=params):
-            user_id = safe_int(item.get("id"))
+            user_id = safe_id(item.get("id"))
             email = normalize_email(item.get("email"))
             if not user_id or not email:
                 log.debug("Skipping user payload without id/email: %s", item)
@@ -85,7 +85,7 @@ class WordPressAdapter(WPPort):
         """
         results: List[CategoryResult] = []
         for item in self._paginate("/wp-json/wp/v2/categories", params={"per_page": 100, "hide_empty": False}):
-            category_id = safe_int(item.get("id"))
+            category_id = safe_id(item.get("id"))
             name = normalize_category_name(item.get("name"))
             if not category_id or not name:
                 log.debug("Skipping category payload without id/name: %s", item)
