@@ -1,5 +1,6 @@
+# Create venv: `python -m venv .venv`
 # Activate script: `.\.venv\Scripts\Activate.ps1`. 
-# Install or upgrade env: `python pip install -e .`
+# Install or upgrade env: `python -m pip install -e .`
 # Run with: `python -m thoughtsparkflow`
 
 from __future__ import annotations
