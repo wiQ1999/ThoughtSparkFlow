@@ -27,10 +27,9 @@ def safe_int(value: Optional[int | str]) -> Optional[int]:
     if value is None:
         return None
     try:
-        integer = int(value)
+        return int(value)
     except (TypeError, ValueError):
         return None
-    return integer if integer >= 0 else None
 
 def safe_id(value: Optional[int | str]) -> Optional[int]:
     if value is None:
