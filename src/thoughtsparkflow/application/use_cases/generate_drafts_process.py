@@ -24,18 +24,18 @@ from thoughtsparkflow.domain.models import (
     WordPressEditor,
 )
 from thoughtsparkflow.domain.ports import (
-    CategoryResult,
     ContentGenRequest,
     DraftCreationRequest,
-    EditorResult,
     ImageGenPort,
-    ImageRequest,
-    MediaUploadRequest,
-    PostMediaUpdateRequest,
     TextGenPort,
     TopicsGenRequest,
     TopicsRequest,
     WPPort,
+)
+
+from .post_featured_image_process import (
+    PostFeaturedImageInput,
+    PostFeaturedImageProcess,
 )
 from .errors import ProcessAbort
 
@@ -95,13 +95,18 @@ class GenerateDraftsProcess:
     ):
         self.wp = wp
         self.text = text
-        self.img = img
         self.log = log or logger
         self.cfg = None
+        self.image_process = PostFeaturedImageProcess(
+            wp=wp,
+            img=img,
+            log=self.log,
+        )
 
     def invoke(self) -> GenerateDraftsResult:
         drafts = DraftsAggregator()
         author_map = AuthorCategoryMap()
+        posts_requiring_images: list[PostFeaturedImageInput] = []
 
         try:
             self.log.info("Fetching editors (WordPress)...")
@@ -214,33 +219,12 @@ class GenerateDraftsProcess:
                     )
                     drafts.set_post_id(subject=item.topic, post_id=post_id)
 
-                    self.log.debug("Generating image for topic=%r", item.topic)
-                    image_bytes = self.img.generate_image(
-                        ImageRequest(
-                            topic=item.topic,
-                            propmpt_id=IMAGE_PROMPT_ID,
-                        )
-                    )
-
-                    self.log.debug("Uploading media for post_id=%d topic=%r", post_id, item.topic)
-                    media_id = self.wp.upload_media(
-                        MediaUploadRequest(
-                            data=image_bytes,
-                            topic=item.topic,
+                    posts_requiring_images.append(
+                        PostFeaturedImageInput(
                             post_id=post_id,
+                            topic=item.topic,
                         )
                     )
-                    drafts.set_media_id(subject=item.topic, media_id=media_id)
-
-                    self.log.debug("Updating post_id=%d with media_id=%d", post_id, media_id)
-                    ok = self.wp.update_post_with_media(
-                        PostMediaUpdateRequest(
-                            post_id=post_id,
-                            media_id=media_id,
-                        )
-                    )
-                    if not ok:
-                        raise ProcessAbort(f"Failed to set featured media for post {post_id}")
 
                 except (ProcessAbort, AuthorCategoryDomainError):
                     raise
@@ -252,6 +236,24 @@ class GenerateDraftsProcess:
                         exc,
                     )
                     continue
+
+            image_assignments = self.image_process.execute(
+                posts=posts_requiring_images,
+                prompt_id=IMAGE_PROMPT_ID,
+            )
+            for assignment in image_assignments:
+                if assignment.post_updated and assignment.media_id is not None:
+                    try:
+                        drafts.set_media_id(
+                            subject=assignment.topic,
+                            media_id=assignment.media_id,
+                        )
+                    except KeyError:
+                        self.log.warning(
+                            "Missing draft for topic=%r when assigning media_id=%d",
+                            assignment.topic,
+                            assignment.media_id,
+                        )
 
             drafts_snapshot = drafts.all()
             created_count = sum(
