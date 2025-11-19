@@ -58,7 +58,7 @@ class PostFeaturedImageProcess:
         self.img = img
         self.log = log or logger
 
-    def execute(
+    def invoke(
         self,
         *,
         posts: Iterable[PostFeaturedImageInput],

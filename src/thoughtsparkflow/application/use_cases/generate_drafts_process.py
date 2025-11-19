@@ -237,7 +237,7 @@ class GenerateDraftsProcess:
                     )
                     continue
 
-            image_assignments = self.image_process.execute(
+            image_assignments = self.image_process.invoke(
                 posts=posts_requiring_images,
                 prompt_id=IMAGE_PROMPT_ID,
             )
