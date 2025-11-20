@@ -31,6 +31,12 @@ class PostFeaturedImageInput:
     post_id: int
     topic: str
 
+    def __post_init__(self) -> None:
+        post_id = ensure_positive_int(self.post_id, "post_id")
+        topic = ensure_non_empty_text(self.topic, "topic")
+        object.__setattr__(self, "post_id", post_id)
+        object.__setattr__(self, "topic", topic)
+
 
 @dataclass(frozen=True)
 class PostFeaturedImageResult:
