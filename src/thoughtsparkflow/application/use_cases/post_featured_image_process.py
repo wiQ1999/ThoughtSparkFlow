@@ -46,7 +46,8 @@ class PostFeaturedImageResult:
 
 
 class PostFeaturedImageProcess:
-    """Small business process responsible for generating and attaching featured images."""
+    """Business process responsible for generating and 
+    attaching featured images to WordPress posts."""
 
     def __init__(
         self,
