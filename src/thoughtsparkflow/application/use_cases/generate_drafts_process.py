@@ -39,11 +39,11 @@ from .post_featured_image_process import (
 )
 from .errors import ProcessAbort
 
+
 PUBLISHED_ARTICLES_NUM = 70
 DRAFT_ARTICLES_NUM = 100000
 TOPICS_PROMPT_ID = "pmpt_68b6076a7fe48194be6ef945bc4b490f01af3bcd933d19d2"
 CONTENT_PROMPT_ID = "pmpt_68b9beaa5f10819387a1b9d3ee4c6fc20f21f9b48cca33f2"
-IMAGE_PROMPT_ID = "pmpt_68c6d934bb4c819482dbb040b855f27304ceda00feb03700"
 
 
 logger = logging.getLogger(__name__)
@@ -239,7 +239,6 @@ class GenerateDraftsProcess:
 
             image_assignments = self.image_process.invoke(
                 posts=posts_requiring_images,
-                prompt_id=IMAGE_PROMPT_ID,
             )
             for assignment in image_assignments:
                 if assignment.post_updated and assignment.media_id is not None:
