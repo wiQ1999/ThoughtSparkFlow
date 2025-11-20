@@ -25,7 +25,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class PostFeaturedImageInput:
-    """Carries information about a WordPress draft that needs a featured image."""
+    """The identifier of the WordPress post along with the subject, 
+    based on which the post image is to be generated."""
 
     post_id: int
     topic: str
