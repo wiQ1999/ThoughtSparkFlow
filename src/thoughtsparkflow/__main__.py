@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 
 from thoughtsparkflow.application.use_cases.generate_drafts_process import GenerateDraftsProcess
+from thoughtsparkflow.application.use_cases.post_featured_image_process import PostFeaturedImageInput, PostFeaturedImageProcess
 from thoughtsparkflow.config.loader import load_config
 from thoughtsparkflow.infrastructure.cms.wordpress_adapter import WordPressAdapter, WordPressAdapterConfig
 from thoughtsparkflow.infrastructure.genai import OpenAIWebAPIConfig
@@ -34,15 +35,26 @@ def main() -> int:
     )
     openai_cfg = OpenAIWebAPIConfig(api_key=cfg.env.openai_api_key)
 
-    process = GenerateDraftsProcess(
+    # process = GenerateDraftsProcess(
+    #     wp=wp_adapter,
+    #     text=OpenAITextGenerator(openai_cfg),
+    #     img=OpenAIImageGenerator(openai_cfg),
+    #     log=log,
+    # )
+
+    image_process = PostFeaturedImageProcess(
         wp=wp_adapter,
-        text=OpenAITextGenerator(openai_cfg),
         img=OpenAIImageGenerator(openai_cfg),
-        log=log,
     )
 
     try:
-        result = process.invoke()
+        # result = process.invoke()
+        result = image_process.invoke(posts=[
+            PostFeaturedImageInput(
+                post_id=911, 
+                topic="Jak zacząć pisać recenzje muzyczne w 7 dnia: szybki, praktyczny przewodnik"
+            )
+        ])
     except Exception as exc:
         log.exception("Draft generation failed: %s", exc)
         return 2
