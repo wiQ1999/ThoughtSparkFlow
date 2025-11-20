@@ -66,8 +66,6 @@ class PostFeaturedImageProcess:
         posts: Iterable[PostFeaturedImageInput],
         prompt_id: str,
     ) -> list[PostFeaturedImageResult]:
-        """Generate and attach featured images for the provided posts."""
-
         prompt = ensure_non_empty_text(prompt_id, "prompt_id")
         results: list[PostFeaturedImageResult] = []
         for raw_post in posts:
