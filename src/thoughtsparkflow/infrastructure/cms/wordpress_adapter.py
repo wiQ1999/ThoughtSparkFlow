@@ -194,6 +194,32 @@ class WordPressAdapter(WPPort):
             return True
         return False
 
+    def post_exists(self, post_id: int) -> bool:
+        """
+        Check whether a WordPress post exists.
+
+        Args:
+            post_id (int): WordPress post identifier.
+
+        Returns:
+            bool: True when post exists, False when it is missing.
+        """
+        pid = ensure_positive_int(post_id, "post_id")
+        path = f"/wp-json/wp/v2/posts/{pid}"
+        url = self.base + path
+        resp = self.session.get(
+            url,
+            timeout=self.cfg.timeout,
+            verify=self.cfg.verify_ssl,
+            headers={"Accept": "application/json"},
+        )
+        if resp.status_code == 404:
+            log.debug("WordPress post not found: post_id=%s", pid)
+            return False
+        if resp.status_code >= 400:
+            self._raise_for_error(resp)
+        return True
+
 
     def _fetch_post_titles(self, *, status: str, limit: int) -> List[str]:
         titles: List[str] = []

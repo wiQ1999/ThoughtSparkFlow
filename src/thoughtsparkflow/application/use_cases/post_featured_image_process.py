@@ -88,6 +88,26 @@ class PostFeaturedImageProcess:
         error_message: Optional[str] = None
 
         try:
+            self.log.debug("Checking existence for post_id=%d in WordPress",
+                post.post_id
+            )
+            if not self.wp.post_exists(post.post_id):
+                error_message = f"WordPress post {post.post_id} does not exist"
+                self.log.error(
+                    "Skipping featured image generation because post_id=%d topic=%r does not exist",
+                    post.post_id,
+                    post.topic,
+                )
+                return PostFeaturedImageResult(
+                    post_id=post.post_id,
+                    topic=post.topic,
+                    media_id=None,
+                    image_generated=image_generated,
+                    media_uploaded=media_uploaded,
+                    post_updated=post_updated,
+                    error=error_message,
+                )
+
             self.log.debug("Generating image for post_id=%d topic=%r", 
                 post.post_id, post.topic
             )
