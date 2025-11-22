@@ -214,7 +214,6 @@ class WordPressAdapter(WPPort):
             headers={"Accept": "application/json"},
         )
         if resp.status_code == 404:
-            log.debug("WordPress post not found: post_id=%s", pid)
             return False
         if resp.status_code >= 400:
             self._raise_for_error(resp)
