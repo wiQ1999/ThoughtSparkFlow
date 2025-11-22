@@ -4,10 +4,10 @@ import base64
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Dict, Iterable, Literal, Optional
 
 import requests
-from openai import OpenAI, OpenAIError, omit
+from openai import Omit, OpenAI, OpenAIError, omit
 
 __all__ = [
     "OpenAIWebAPIConfig",
@@ -52,10 +52,10 @@ class OpenAIWebAPIClient:
 
     def run_prompt(
             self, 
-            prompt: Dict[str, Any], 
-            input: str = omit, 
-            stream = omit, 
-            tools = omit
+            prompt: Any, 
+            input: str | Omit = omit,
+            stream: Omit | Literal[False] = omit, 
+            tools: Iterable[Any] | Omit = omit
         ) -> dict:
         """Execute a stored prompt and return the raw JSON payload."""
 
@@ -64,7 +64,7 @@ class OpenAIWebAPIClient:
                 prompt=prompt,
                 input=input,
                 stream=stream,
-                tools=tools
+                tools=tools,
             )
         except OpenAIError as exc:
             raise OpenAIWebAPIError(
@@ -132,13 +132,13 @@ class OpenAIWebAPIClient:
             response_payload,
         )
 
-    def extract_image_bytes(self, response_payload: dict) -> bytes:
+    def extract_image_bytes(self, response_payload: Any) -> bytes:
         """Return the first image output as raw bytes."""
 
         image_data = [
-            output.result
-            for output in response_payload.output
-            if output.type == "image_generation_call"
+            output["result"]
+            for output in response_payload["output"]
+            if output["type"] == "image_generation_call"
         ]
         if image_data:
             image_base64 = image_data[0]
@@ -178,6 +178,7 @@ class OpenAIWebAPIClient:
     def _to_payload(response: Any) -> dict:
         if isinstance(response, dict):
             return response
+        dump = None
         if hasattr(response, "model_dump"):
             dump = response.model_dump()
         elif hasattr(response, "dict"):
@@ -185,7 +186,7 @@ class OpenAIWebAPIClient:
         elif hasattr(response, "json"):
             try:
                 dump = json.loads(response.json())
-            except ValueError:
+            except json.JSONDecodeError:
                 raise OpenAIWebAPIError(
                     500,
                     f"Unable to parse OpenAI response payload (type={type(response).__name__}, value={repr(response)})",
