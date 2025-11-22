@@ -171,7 +171,7 @@ class AuthorCategoryMap:
             missing_fields: list[str] = []
             if entry.category_id is None:
                 missing_fields.append("category_id")
-            elif entry.category_id != category.id:
+            elif entry.category_id != str(category.id):
                 missing_fields.append(
                     f"category_id mismatch (expected {category.id}, got {entry.category_id})"
                 )
