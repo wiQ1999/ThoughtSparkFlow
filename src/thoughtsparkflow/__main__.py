@@ -35,26 +35,15 @@ def main() -> int:
     )
     openai_cfg = OpenAIWebAPIConfig(api_key=cfg.env.openai_api_key)
 
-    # process = GenerateDraftsProcess(
-    #     wp=wp_adapter,
-    #     text=OpenAITextGenerator(openai_cfg),
-    #     img=OpenAIImageGenerator(openai_cfg),
-    #     log=log,
-    # )
-
-    image_process = PostFeaturedImageProcess(
+    process = GenerateDraftsProcess(
         wp=wp_adapter,
+        text=OpenAITextGenerator(openai_cfg),
         img=OpenAIImageGenerator(openai_cfg),
+        log=log,
     )
 
     try:
-        # result = process.invoke()
-        result = image_process.invoke(posts=[
-            PostFeaturedImageInput(
-                post_id=911, 
-                topic="Jak zacząć pisać recenzje muzyczne w 7 dnia: szybki, praktyczny przewodnik"
-            )
-        ])
+        result = process.invoke()
     except Exception as exc:
         log.exception("Draft generation failed: %s", exc)
         return 2
