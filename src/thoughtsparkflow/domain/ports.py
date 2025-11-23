@@ -39,8 +39,9 @@ class WPPort(Protocol):
     def update_post_with_media(self, request: PostMediaUpdateRequest) -> bool: ...
 
 class TopicsGenRequest(BaseModel):
-    last_topics: list[str]
     categories: list[str]
+    last_topics: list[str]
+    topics_num: int
     propmpt_id: str
 
 class TopicWithCategoryResult(BaseModel):

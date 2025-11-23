@@ -43,7 +43,7 @@ def main() -> int:
     )
 
     try:
-        result = process.invoke()
+        result = process.invoke(2)
     except Exception as exc:
         log.exception("Draft generation failed: %s", exc)
         return 2

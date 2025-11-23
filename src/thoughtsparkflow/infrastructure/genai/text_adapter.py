@@ -34,13 +34,14 @@ class OpenAITextGenerator(TextGenPort):
     def generate_topics(self, request: TopicsGenRequest) -> Iterable[TopicWithCategoryResult]:
         prompt = {
             "id": _TOPICS_PROMPT_ID,
-            "version": "11",
+            "version": "12",
             "variables": {
                 "categories": ", ".join(request.categories),
                 "last_topics": ", ".join(f'"{x}"' for x in request.last_topics),
+                "topics_num": str(request.topics_num),
             }
         }
-        input = "Wygeneruj w formacie json."
+        input = "Wygeneruj odpowiedź w formacie JSON."
         response = self.client.run_prompt(prompt, input)
         topics_payload = self.client.extract_json(response)
         topics = self._parse_topics(topics_payload)

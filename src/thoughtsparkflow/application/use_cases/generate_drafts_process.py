@@ -103,7 +103,7 @@ class GenerateDraftsProcess:
             log=self.log,
         )
 
-    def invoke(self) -> GenerateDraftsResult:
+    def invoke(self, count: int) -> GenerateDraftsResult:
         drafts = DraftsAggregator()
         author_map = AuthorCategoryMap()
 
@@ -172,6 +172,7 @@ class GenerateDraftsProcess:
                     TopicsGenRequest(
                         last_topics=last_topics,
                         categories=categories,
+                        topics_num=count,
                         propmpt_id=TOPICS_PROMPT_ID,
                     )
                 )
