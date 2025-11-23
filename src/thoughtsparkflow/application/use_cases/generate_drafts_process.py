@@ -106,7 +106,6 @@ class GenerateDraftsProcess:
     def invoke(self) -> GenerateDraftsResult:
         drafts = DraftsAggregator()
         author_map = AuthorCategoryMap()
-        posts_requiring_images: list[PostFeaturedImageInput] = []
 
         try:
             self.log.info("Fetching editors (WordPress)...")
@@ -219,12 +218,27 @@ class GenerateDraftsProcess:
                     )
                     drafts.set_post_id(subject=item.topic, post_id=post_id)
 
-                    posts_requiring_images.append(
-                        PostFeaturedImageInput(
-                            post_id=post_id,
-                            topic=item.topic,
-                        )
+                    image_assignments = self.image_process.invoke(
+                        posts=[
+                            PostFeaturedImageInput(
+                                post_id=post_id,
+                                topic=item.topic,
+                            )
+                        ],
                     )
+                    for assignment in image_assignments:
+                        if assignment.post_updated and assignment.media_id is not None:
+                            try:
+                                drafts.set_media_id(
+                                    subject=assignment.topic,
+                                    media_id=assignment.media_id,
+                                )
+                            except KeyError:
+                                self.log.warning(
+                                    "Missing draft for topic=%r when assigning media_id=%d",
+                                    assignment.topic,
+                                    assignment.media_id,
+                                )
 
                 except (ProcessAbort, AuthorCategoryDomainError):
                     raise
@@ -236,23 +250,6 @@ class GenerateDraftsProcess:
                         exc,
                     )
                     continue
-
-            image_assignments = self.image_process.invoke(
-                posts=posts_requiring_images,
-            )
-            for assignment in image_assignments:
-                if assignment.post_updated and assignment.media_id is not None:
-                    try:
-                        drafts.set_media_id(
-                            subject=assignment.topic,
-                            media_id=assignment.media_id,
-                        )
-                    except KeyError:
-                        self.log.warning(
-                            "Missing draft for topic=%r when assigning media_id=%d",
-                            assignment.topic,
-                            assignment.media_id,
-                        )
 
             drafts_snapshot = drafts.all()
             created_count = sum(
